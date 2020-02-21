@@ -1,3 +1,4 @@
+# Position AND tip velocity
 import gym
 import numpy as np
 import random
@@ -6,8 +7,8 @@ import matplotlib.pyplot as plt
 env = gym.make('CartPole-v1')
 
 # Initialize q-table values to 0
-discretization = 256
-Q = np.zeros((discretization, env.action_space.n))    # (states_space, action_space)
+discretization = 512
+Q = np.zeros((20,discretization, env.action_space.n))    # (states_space, action_space)
 
 # Initialize hyperparameters
 gamma = 0.9         # Discount factor used to balance immediate and future reward.
@@ -24,28 +25,32 @@ def running_mean(x, N):
     return (cumsum[N:] - cumsum[:-N]) / float(N)
 
 
-def get_state(tip_speed):
+def get_state(cart_position, tip_speed):
     """Returns index of the given tip speed state in the Q-table"""
+    positions = np.linspace(-5,5,num=5)
     states = np.linspace(-3,3,num=discretization)   # Discretized table of tip speeds. Range of 3 indicates possible speeds
-    for rounded_tip_speed in states:
-        if rounded_tip_speed >= tip_speed:
-            index = np.where(states == rounded_tip_speed)
-            index = index[0][0]
-            return index
+    for rounded_cart_position in positions:
+        if rounded_cart_position >= cart_position:
+            cart_index = np.where(positions == rounded_cart_position)
+            for rounded_tip_speed in states:
+                if rounded_tip_speed >= tip_speed:
+                    index = np.where(states == rounded_tip_speed)
+                    index = index[0][0]
+                    return cart_index, index
 
-def better_action(tip_speed):
+def better_action(cart_position, tip_speed):
     """Returns index of best action according to Q-table for a given tip speed"""
-    possible_actions_in_state = Q[get_state(tip_speed)]
+    possible_actions_in_state = Q[get_state(cart_position, tip_speed)]
     action_of_choice = np.argmax(possible_actions_in_state)
     return action_of_choice
 
-def update_q(state, action, new_state, reward=1):
-    Q[state, action] = Q[state, action] + lr * (reward + gamma * np.max(Q[new_state, :]) - Q[state, action])
+def update_q(state, action, new_state, cart_pos, new_cart_pos, reward=1):
+    Q[cart_pos, state, action] = Q[cart_pos, state, action] + lr * (reward + gamma * np.max(Q[new_cart_pos, new_state, :]) - Q[cart_pos, state, action])
 
 
 
 
-for i_episode in range(5000):
+for i_episode in range(6000):
     observation = env.reset()
     episode_reward = 0
 
@@ -62,21 +67,23 @@ for i_episode in range(5000):
     
 
         tip_speed = observation[3]
+        cart_position = observation[0]
 
         if random.uniform(0, 1) < epsilon:      # Chooses random action often if epsilon is high
             action = env.action_space.sample()
 
         else:
-            action = better_action(tip_speed)
+            action = better_action(cart_position, tip_speed)
 
         # Gather info about changes in environment 
-        state = get_state(tip_speed)
+        state = get_state(cart_position,tip_speed)
         observation, reward, done, info = env.step(action)
         new_tip_speed = observation[3]
-        new_state = get_state(new_tip_speed)
+        new_cart_pos = observation[0]
+        new_state = get_state(new_cart_pos, new_tip_speed)
 
         # Update Q-table
-        update_q(state, action, new_state, reward)
+        update_q(state, action, new_state, cart_position, new_cart_pos, reward)
 
         episode_reward += reward
 
